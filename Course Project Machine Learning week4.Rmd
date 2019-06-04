@@ -1,0 +1,103 @@
+---
+title: "Course Project Machine Learning Week 4"
+author: "Darima Butitova"
+date: "6/4/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. The goal of the project is to predict the manner in which 6 participants did the exercise, using data from accelerometers on the belt, forearm, arm, and dumbell. Participants were asked to perform barbell lifts correctly and incorrectly in 5 different ways. 
+More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+#Data
+Two datasets are given with training and testing data. The dependent variable is "classe" - factor variable with 5 levels corresponding to the way participants performed barbell lifts. After cleaning the data, the training data has 19622 observations and 59 variables (including "classe"), testing data has 20 observations and 58 variables. 100 variables were dropped, as 98% were missing values.
+
+
+```{r}
+# Loading Data
+
+fileUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+download.file(fileUrl, destfile = "/Users/darimabutitova/Desktop/Coursera/pml-training.csv", method="curl")
+
+
+fileUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(fileUrl, destfile = "/Users/darimabutitova/Desktop/Coursera/pml-testing.csv", method="curl")
+
+training <- read.csv("/Users/darimabutitova/Desktop/Coursera/pml-training.csv", stringsAsFactors = F, na.strings = c("", "NA"))
+testing  <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", stringsAsFactors = F, na.strings = c("", "NA"))
+
+#Cleaning training data
+
+anymissing <- colSums(is.na(training)) # counting number of missing values in each column
+        missing <- anymissing[anymissing>0] # looking only at columns with missing values
+                missing #19216 missing values in 100 columns
+
+19216/19622 #[1] 0.9793089 decided to drop since 98% is missing no point to impute... 100 variables to drop
+training <- training[, colSums(is.na(training))==0] # dropping columns with missing values
+training <- training[,-1] # don't need this variable, as it's basically just a row number
+
+#Recoding variables
+training$cvtd_timestamp <- as.POSIXct(training$cvtd_timestamp, format="%d/%m/%Y  %H:%M")
+training$user_name <- as.factor(training$user_name)
+training$new_window <- as.factor(training$new_window)
+training$classe <- as.factor(training$classe)
+
+
+# Cleaning testing data
+anymissing <- colSums(is.na(testing)) 
+testing <- testing[, colSums(is.na(testing))==0]
+testing <- testing[, -c(1, 60)] # don't need these variables, as it's basically just a row number
+testing$cvtd_timestamp <- as.POSIXct(testing$cvtd_timestamp, format="%d/%m/%Y  %H:%M")
+testing$user_name <- as.factor(testing$user_name)
+testing$new_window <- as.factor(testing$new_window)
+
+#Comparing training and testing data
+a <- names(training)
+b <- names(testing)
+setdiff(b, a)
+setdiff(a, b)
+
+#Making sure the predictors are the same across two datasets
+testing <- rbind(training[1, -59], testing) # adding first row of training data to testing while dropping "classe"
+testing <- testing[-1,] # deleting the row that we just added
+```
+
+#Data Analysis 
+
+Given that our response variable is a factor with 5 levels, and the goal of the project is a classification problem, we choose randomForest. The training data is divided into training1 and validation datasets to compare error rates and predictions on the testing data. 
+
+
+```{r}
+# Create training and validation set
+library(caret)
+valid <- createDataPartition(y=training$classe,
+                               p=0.8, list=F)
+training1 <- training[valid,]
+validation <- training[-valid,]
+
+#Random Forest 
+library(randomForest)
+rftrain <- randomForest(x=training1[,-59], y=training1$classe, data=training1)
+rfvalid <- randomForest(x=validation[,-59], y=validation$classe, data=validation)
+rftrain
+rfvalid
+
+#Predicting testing using training1 and validation datasets
+pred <- predict(rftrain, testing)
+predval <- predict(rfvalid, testing)
+pred
+predval
+
+```
+
+#Results
+
+500 trees were built with 7 variables at each split. The error rate for training1 dataset is a bit lower, than the error rate for validaiton dataset, overall the error rates are quite low. The results look good and we procede with predictions. We have similar prediction values after using training1 and validation dataset on testing data. 
+
+B  A  B  A  A  E  D  B  A  A  B  C  B  A  E  E  A  B  B  B 
+
+Thus, randomForest worked great on this classification problem.
